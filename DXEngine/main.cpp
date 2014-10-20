@@ -237,19 +237,22 @@ HRESULT init_dx11( HWND hwnd )
 	cntxt->inited_flag_dx11_ = true;
 
 	//頂点の定義
-	std::array< custom_vertex, 3 > vertices =
+	std::array< custom_vertex, 4 > vertices =
 	{
+		XMFLOAT3( 0.5f, 0.5f, 0.5f ),
+		XMFLOAT3( 0.5f, 0.0f, 0.5f ),
 		XMFLOAT3( 0.0f, 0.5f, 0.5f ),
-		XMFLOAT3( 0.5f, -0.5f, 0.5f ),
-		XMFLOAT3( -0.5f, -0.5f, 0.5f )
+		XMFLOAT3( 0.0f, 0.0f, 0.5f )
+
 	};
+
 
 	//頂点バッファの設定
 	D3D11_BUFFER_DESC bd;
 	ZeroMemory( std::addressof( bd ), sizeof bd );
 	bd.Usage = D3D11_USAGE_DEFAULT;
-	bd.ByteWidth = ( sizeof custom_vertex ) * 3;
-	bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+	bd.ByteWidth = ( sizeof custom_vertex ) * vertices.size();//sizeof XMFLOAT3
+	bd.BindFlags = D3D11_BIND_INDEX_BUFFER;//D3D11_BIND_VERTEX_BUFFER;
 	bd.CPUAccessFlags = 0;
 	
 	//サブリソースの設定
@@ -276,7 +279,8 @@ HRESULT init_dx11( HWND hwnd )
 	cntxt->i_vertex_buffer_.reset( p_vertex_buffer );
 
 	//プリミティブの種類を設定
-	cntxt->i_dev_context_->IASetPrimitiveTopology( D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST );
+	cntxt->i_dev_context_->IASetPrimitiveTopology( D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP );
+	//cntxt->i_dev_context_->IASetPrimitiveTopology( D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST );
 
 	return S_OK;
 
@@ -300,7 +304,9 @@ void render_dx11()
 	cntxt->i_dev_context_->VSSetShader( cntxt->i_vertex_shader_.get(), nullptr, 0 );
 	cntxt->i_dev_context_->GSSetShader( cntxt->i_geometry_shader_.get(), nullptr, 0 );
 	cntxt->i_dev_context_->PSSetShader( cntxt->i_pixel_shader_.get(), nullptr, 0 );
-	cntxt->i_dev_context_->Draw( 3, 0 );
+	
+	cntxt->i_dev_context_->Draw( 4, 0 );
+
 
 	//結果をWindowに反映
 	cntxt->i_swap_chain_->Present( 0, 0 );
