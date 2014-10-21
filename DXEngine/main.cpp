@@ -53,6 +53,88 @@ namespace
 }
 
 
+HRESULT create_index_buffer( custom_vertex const * const vertices, std::size_t const index_num )
+{
+	HRESULT hr;
+
+	//頂点バッファの設定
+	D3D11_BUFFER_DESC bd;
+	ZeroMemory( std::addressof( bd ), sizeof bd );
+	bd.Usage = D3D11_USAGE_DEFAULT;
+	bd.ByteWidth = ( sizeof custom_vertex ) * index_num;//sizeof XMFLOAT3
+	bd.BindFlags = D3D11_BIND_INDEX_BUFFER;//D3D11_BIND_VERTEX_BUFFER;
+	bd.CPUAccessFlags = 0;
+
+	//サブリソースの設定
+	D3D11_SUBRESOURCE_DATA init_data;
+	ZeroMemory( std::addressof( init_data ), sizeof init_data );
+	init_data.pSysMem = vertices;
+	
+	ID3D11Buffer * p_vertex_buffer = nullptr;
+
+	//頂点バッファ生成
+	hr = cntxt->i_dev_->CreateBuffer( std::addressof( bd ), std::addressof( init_data ), std::addressof( p_vertex_buffer ) );
+
+	if( FAILED( hr ) )
+	{
+		return hr;
+	}
+
+
+	//入力アセンブラに頂点バッファを設定
+	UINT stride = sizeof custom_vertex;
+	UINT offset = 0;
+
+	//入力アセンブラに頂点バッファを設定
+	cntxt->i_dev_context_->IASetVertexBuffers( 0, 1, std::addressof( p_vertex_buffer ), std::addressof( stride ), std::addressof( offset ) );
+
+	cntxt->i_vertex_buffer_.reset( p_vertex_buffer );
+
+	return hr;
+}
+
+HRESULT create_buffer( custom_vertex const * const vertices, std::size_t const vertices_num )
+{
+	HRESULT hr;
+
+	//頂点バッファの設定
+	D3D11_BUFFER_DESC bd;
+	ZeroMemory( std::addressof( bd ), sizeof bd );
+	bd.Usage = D3D11_USAGE_DEFAULT;
+	bd.ByteWidth = ( sizeof custom_vertex ) * vertices_num;
+	bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+	bd.CPUAccessFlags = 0;
+
+	//サブリソースの設定
+	D3D11_SUBRESOURCE_DATA init_data;
+	ZeroMemory( std::addressof( init_data ), sizeof init_data );
+	init_data.pSysMem = vertices;
+
+	ID3D11Buffer * p_vertex_buffer = nullptr;
+
+	//頂点バッファ生成
+	hr = cntxt->i_dev_->CreateBuffer( std::addressof( bd ), std::addressof( init_data ), std::addressof( p_vertex_buffer ) );
+
+	if( FAILED( hr ) )
+	{
+		return hr;
+	}
+
+
+	//入力アセンブラに頂点バッファを設定
+	UINT stride = sizeof custom_vertex;
+	UINT offset = 0;
+
+	//入力アセンブラに頂点バッファを設定
+	cntxt->i_dev_context_->IASetVertexBuffers( 0, 1, std::addressof( p_vertex_buffer ), std::addressof( stride ), std::addressof( offset ) );
+
+	cntxt->i_vertex_buffer_.reset( p_vertex_buffer );
+
+	return hr;
+}
+
+
+
 
 HRESULT init_dx11( HWND hwnd )
 {
@@ -246,37 +328,19 @@ HRESULT init_dx11( HWND hwnd )
 
 	};
 
-
-	//頂点バッファの設定
-	D3D11_BUFFER_DESC bd;
-	ZeroMemory( std::addressof( bd ), sizeof bd );
-	bd.Usage = D3D11_USAGE_DEFAULT;
-	bd.ByteWidth = ( sizeof custom_vertex ) * vertices.size();//sizeof XMFLOAT3
-	bd.BindFlags = D3D11_BIND_INDEX_BUFFER;//D3D11_BIND_VERTEX_BUFFER;
-	bd.CPUAccessFlags = 0;
-	
-	//サブリソースの設定
-	D3D11_SUBRESOURCE_DATA init_data;
-	ZeroMemory( std::addressof( init_data ), sizeof init_data );
-	init_data.pSysMem = vertices.data();
-
-	ID3D11Buffer * p_vertex_buffer = nullptr;
-
-	//頂点バッファ生成
-	hr = cntxt->i_dev_->CreateBuffer( std::addressof( bd ), std::addressof( init_data ), std::addressof( p_vertex_buffer ) );
-
-	if( FAILED( hr ) )
+	//頂点の定義
+	std::array< custom_vertex, 4 > vertices2 =
 	{
-		return hr;
-	}
+		XMFLOAT3( 0.0f, 0.2f, 0.5f ),
+		XMFLOAT3( 0.0f, 0.0f, 0.5f ),
+		XMFLOAT3( -0.1f,  0.2f, 0.5f ),
+		XMFLOAT3( -0.1f, 0.0f, 0.5f )
 
-	//入力アセンブラに頂点バッファを設定
-	UINT stride = sizeof custom_vertex;
-	UINT offset = 0;
+	};
 
-	cntxt->i_dev_context_->IASetVertexBuffers( 0, 1, std::addressof( p_vertex_buffer ), std::addressof( stride ), std::addressof( offset ) );
+	create_index_buffer( vertices.data( ), vertices.size( ) );
 
-	cntxt->i_vertex_buffer_.reset( p_vertex_buffer );
+	create_index_buffer( vertices2.data(), vertices2.size() );
 
 	//プリミティブの種類を設定
 	cntxt->i_dev_context_->IASetPrimitiveTopology( D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP );
