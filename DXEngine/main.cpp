@@ -88,6 +88,7 @@ HRESULT create_index_buffer( custom_vertex const * const vertices, std::size_t c
 	//入力アセンブラに頂点バッファを設定
 	cntxt->i_dev_context_->IASetVertexBuffers( 0, 1, std::addressof( p_vertex_buffer ), std::addressof( stride ), std::addressof( offset ) );
 
+	//cntxt->i_vertex_buffer_->
 	cntxt->i_vertex_buffer_.reset( p_vertex_buffer );
 
 	return hr;
@@ -340,7 +341,7 @@ HRESULT init_dx11( HWND hwnd )
 
 	create_index_buffer( vertices.data( ), vertices.size( ) );
 
-	create_index_buffer( vertices2.data(), vertices2.size() );
+	//create_index_buffer( vertices2.data(), vertices2.size() );
 
 	//プリミティブの種類を設定
 	cntxt->i_dev_context_->IASetPrimitiveTopology( D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP );
