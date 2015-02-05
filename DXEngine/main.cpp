@@ -53,6 +53,10 @@ namespace
 }
 
 
+ID3D11Buffer * p_vertex_buffers[ 2 ];
+
+static int slot = 0;
+
 HRESULT create_index_buffer( custom_vertex const * const vertices, std::size_t const index_num )
 {
 	HRESULT hr;
@@ -80,16 +84,17 @@ HRESULT create_index_buffer( custom_vertex const * const vertices, std::size_t c
 		return hr;
 	}
 
-
 	//入力アセンブラに頂点バッファを設定
 	UINT stride = sizeof custom_vertex;
 	UINT offset = 0;
 
 	//入力アセンブラに頂点バッファを設定
+	p_vertex_buffers[ slot++ ] = p_vertex_buffer;
 	cntxt->i_dev_context_->IASetVertexBuffers( 0, 1, std::addressof( p_vertex_buffer ), std::addressof( stride ), std::addressof( offset ) );
+	//cntxt->i_dev_context_->Draw( index_num, 0 );
 
 	//cntxt->i_vertex_buffer_->
-	cntxt->i_vertex_buffer_.reset( p_vertex_buffer );
+	//cntxt->i_vertex_buffer_.reset( p_vertex_buffer );
 
 	return hr;
 }
@@ -176,9 +181,29 @@ HRESULT init_dx11( HWND hwnd )
 		false, std::addressof( feature_level ), 1, D3D11_SDK_VERSION, std::addressof( sd ),
 		std::addressof( swap_chain_ptr ), std::addressof( dev_ptr ), std::addressof( cntxt->feature_level_ ), std::addressof( dev_context_ptr ) );
 
+	//for文で成功したら脱出みたいな処理のほうがスマートそう(このコードだとネストが深くなっていく
+
 	if( FAILED( hr ) )
 	{
-		return hr;
+		//feature_levelを切り替えて再度試みる
+		feature_level = D3D_FEATURE_LEVEL_10_1;
+
+		hr = D3D11CreateDeviceAndSwapChain( NULL, cntxt->driver_type_, NULL,
+			false, std::addressof( feature_level ), 1, D3D11_SDK_VERSION, std::addressof( sd ),
+			std::addressof( swap_chain_ptr ), std::addressof( dev_ptr ), std::addressof( cntxt->feature_level_ ), std::addressof( dev_context_ptr ) );
+
+		if( FAILED( hr ) )
+		{
+			feature_level = D3D_FEATURE_LEVEL_10_0;
+
+			hr = D3D11CreateDeviceAndSwapChain( NULL, cntxt->driver_type_, NULL,
+				false, std::addressof( feature_level ), 1, D3D11_SDK_VERSION, std::addressof( sd ),
+				std::addressof( swap_chain_ptr ), std::addressof( dev_ptr ), std::addressof( cntxt->feature_level_ ), std::addressof( dev_context_ptr ) );
+
+			if( FAILED( hr ) )
+				return hr;
+		}
+
 	}
 	
 	//初期化に成功したので一時変数を代入する
@@ -341,7 +366,7 @@ HRESULT init_dx11( HWND hwnd )
 
 	create_index_buffer( vertices.data( ), vertices.size( ) );
 
-	//create_index_buffer( vertices2.data(), vertices2.size() );
+	create_index_buffer( vertices2.data(), vertices2.size() );
 
 	//プリミティブの種類を設定
 	cntxt->i_dev_context_->IASetPrimitiveTopology( D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP );
@@ -370,9 +395,17 @@ void render_dx11()
 	cntxt->i_dev_context_->GSSetShader( cntxt->i_geometry_shader_.get(), nullptr, 0 );
 	cntxt->i_dev_context_->PSSetShader( cntxt->i_pixel_shader_.get(), nullptr, 0 );
 	
-	cntxt->i_dev_context_->Draw( 4, 0 );
 
+	for( int i = 1; i < slot; ++i )
+	{
+		UINT stride = sizeof custom_vertex;
+		UINT offset = 0;
+		cntxt->i_dev_context_->IASetVertexBuffers( 0, 1, std::addressof( p_vertex_buffers[ i ] ), std::addressof( stride ), std::addressof( offset ) );
 
+		cntxt->i_dev_context_->Draw( 4, 0 );
+
+	}
+	
 	//結果をWindowに反映
 	cntxt->i_swap_chain_->Present( 0, 0 );
 }
