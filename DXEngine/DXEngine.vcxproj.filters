@@ -16,6 +16,9 @@
     <Filter Include="ソース ファイル\include">
       <UniqueIdentifier>{dc5682ee-dd45-4c35-934e-15fe4da4bc2a}</UniqueIdentifier>
     </Filter>
+    <Filter Include="ソース ファイル\include\modules">
+      <UniqueIdentifier>{bf11c47c-901f-406f-ace6-6d5401fa484b}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -24,6 +27,9 @@
     <ClCompile Include="shader.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
+    <ClCompile Include="time_manager.cpp">
+      <Filter>ソース ファイル\include\modules</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="common.h">
@@ -31,6 +37,9 @@
     </ClInclude>
     <ClInclude Include="shader.h">
       <Filter>ソース ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="time_manager.h">
+      <Filter>ソース ファイル\include\modules</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

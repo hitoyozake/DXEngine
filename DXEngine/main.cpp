@@ -2,12 +2,19 @@
 #include <D3D11.h>
 #include <DirectXMath.h> //namespace DirectX空間使用
 #include <xnamath.h>
+#include <string>
 #include <memory>
+#include <vector>
 #include <locale>
 #include <Windows.h>
+#include <boost/format.hpp>
+
 #include "shader.h"
 
 #include "common.h"
+
+#include "time_manager.h"
+
 
 //****************************************//
 //プロトタイプ宣言
@@ -53,9 +60,7 @@ namespace
 }
 
 
-ID3D11Buffer * p_vertex_buffers[ 2 ];
-
-static int slot = 0;
+std::vector< ID3D11Buffer * > p_vertex_buffers;
 
 HRESULT create_index_buffer( custom_vertex const * const vertices, std::size_t const index_num )
 {
@@ -89,14 +94,15 @@ HRESULT create_index_buffer( custom_vertex const * const vertices, std::size_t c
 	UINT offset = 0;
 
 	//入力アセンブラに頂点バッファを設定
-	p_vertex_buffers[ slot++ ] = p_vertex_buffer;
+	p_vertex_buffers.push_back( p_vertex_buffer );
 	cntxt->i_dev_context_->IASetVertexBuffers( 0, 1, std::addressof( p_vertex_buffer ), std::addressof( stride ), std::addressof( offset ) );
-	//cntxt->i_dev_context_->Draw( index_num, 0 );
-
-	//cntxt->i_vertex_buffer_->
-	//cntxt->i_vertex_buffer_.reset( p_vertex_buffer );
 
 	return hr;
+}
+
+float convert_cordinate( int const position, int window_length )
+{
+	return static_cast< float >( position - window_length / 2 ) / ( ( window_length != 0 ? window_length : 100000 ) / 2.0 );
 }
 
 HRESULT create_buffer( custom_vertex const * const vertices, std::size_t const vertices_num )
@@ -344,13 +350,15 @@ HRESULT init_dx11( HWND hwnd )
 
 	cntxt->inited_flag_dx11_ = true;
 
+	auto const v = convert_cordinate( 310, 640 );
+
 	//頂点の定義
 	std::array< custom_vertex, 4 > vertices =
 	{
-		XMFLOAT3( 0.5f, 0.5f, 0.5f ),
-		XMFLOAT3( 0.5f, 0.0f, 0.5f ),
-		XMFLOAT3( 0.0f, 0.5f, 0.5f ),
-		XMFLOAT3( 0.0f, 0.0f, 0.5f )
+		XMFLOAT3( convert_cordinate( 500, 640 ), 0.5f, 0.5f ),
+		XMFLOAT3( convert_cordinate( 500, 640 ), 0.3f, 0.5f ),
+		XMFLOAT3( convert_cordinate( 310, 640 ), 0.5f, 0.5f ),
+		XMFLOAT3( convert_cordinate( 310, 640 ), 0.3f, 0.5f )
 
 	};
 
@@ -396,7 +404,7 @@ void render_dx11()
 	cntxt->i_dev_context_->PSSetShader( cntxt->i_pixel_shader_.get(), nullptr, 0 );
 	
 
-	for( int i = 1; i < slot; ++i )
+	for( int i = 0; i < p_vertex_buffers.size(); ++i )
 	{
 		UINT stride = sizeof custom_vertex;
 		UINT offset = 0;
@@ -435,8 +443,20 @@ int WINAPI WinMain(
 
 	MSG msg = { 0 };
 
+	time_m::time_manager tm;
+
 	while( WM_QUIT != msg.message )
 	{
+		tm.update();
+
+		auto const frame = tm.get_fps();
+		auto const fpsstr = boost::format( "%0.3f" ) % frame;
+		
+		
+		SetWindowText( global_h_wnd, static_cast< LPCSTR >( fpsstr.str( ).c_str() ) );
+		
+		Sleep( 16 );
+
 		if( PeekMessage( std::addressof( msg ), NULL, 0, 0, PM_REMOVE ) )
 		{
 			TranslateMessage( std::addressof( msg ) );
@@ -466,7 +486,7 @@ HRESULT init_window( HINSTANCE h_instance, int n_cmd_show )
 	wcex.hCursor = LoadCursor( NULL, IDC_ARROW );
 	wcex.hbrBackground = reinterpret_cast< HBRUSH >( COLOR_WINDOW + 1 );
 	wcex.lpszMenuName = NULL;
-	wcex.lpszClassName = L"dx11WindowClass";
+	wcex.lpszClassName = "dx11WindowClass";
 	wcex.hIconSm = NULL;
 
 	if( !RegisterClassEx( std::addressof( wcex ) ) )
@@ -478,7 +498,7 @@ HRESULT init_window( HINSTANCE h_instance, int n_cmd_show )
 
 	AdjustWindowRect( std::addressof( rc ), WS_OVERLAPPEDWINDOW, FALSE );
 
-	global_h_wnd = CreateWindow( L"dx11WindowClass", L"Direct11 Test", WS_OVERLAPPEDWINDOW,
+	global_h_wnd = CreateWindow( "dx11WindowClass", "Direct11 Test", WS_OVERLAPPEDWINDOW,
 		CW_USEDEFAULT, CW_USEDEFAULT, rc.right - rc.left, rc.bottom - rc.top, NULL, NULL, h_instance, NULL );
 
 	if( ! global_h_wnd )
