@@ -1,5 +1,6 @@
 
 #include <chrono>
+#include <Windows.h>
 #include <algorithm>
 
 namespace time_m
@@ -18,6 +19,17 @@ namespace time_m
 			calc_result_ = std::chrono::duration_cast< std::chrono::milliseconds >( end_ - start_ ).count();
 			start_ = end_;
 			end_ = std::chrono::system_clock::now();
+		}
+
+		void wait_auto()
+		{
+			//60fpsÇ…é©ìÆÇ≈í≤êÆÇ∑ÇÈ
+			if( calc_result_ < 16 )
+			{
+				Sleep( 16 - calc_result_ );
+			}
+
+			update();
 		}
 
 	private:

@@ -16,18 +16,6 @@
 #include "time_manager.h"
 
 
-//****************************************//
-//プロトタイプ宣言
-HRESULT init_dx11( HWND hwnd );
-void exit_dx11();
-void render_dx11();
-
-HRESULT init_window( HINSTANCE h_instance, int n_cmd_show );
-LRESULT CALLBACK WndProc( HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam );
-//****************************************//
-HWND global_h_wnd;
-//****************************************//
-
 struct context
 {
 	boost::shared_ptr< ID3D11Device > i_dev_;
@@ -55,9 +43,24 @@ struct custom_vertex
 //無名名前空間
 namespace
 {
-	context* cntxt;
-	//std::unique_ptr< context > cntxt;
+	context * cntxt;
 }
+
+
+//****************************************//
+//プロトタイプ宣言
+HRESULT init_dx11( HWND hwnd );
+void exit_dx11();
+void render_dx11();
+
+HRESULT init_window( HINSTANCE h_instance, int n_cmd_show );
+LRESULT CALLBACK WndProc( HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam );
+
+HRESULT create_buffer( custom_vertex const * const vertices, std::size_t const vertices_num );
+std::array< custom_vertex, 4 > create_vertices( int const x, int const y, int const width, int const height );
+//****************************************//
+HWND global_h_wnd;
+//****************************************//
 
 
 std::vector< ID3D11Buffer * > p_vertex_buffers;
@@ -69,10 +72,11 @@ HRESULT create_index_buffer( custom_vertex const * const vertices, std::size_t c
 	//頂点バッファの設定
 	D3D11_BUFFER_DESC bd;
 	ZeroMemory( std::addressof( bd ), sizeof bd );
-	bd.Usage = D3D11_USAGE_DEFAULT;
+	bd.Usage = D3D11_USAGE_DYNAMIC;
+
 	bd.ByteWidth = ( sizeof custom_vertex ) * index_num;//sizeof XMFLOAT3
 	bd.BindFlags = D3D11_BIND_INDEX_BUFFER;//D3D11_BIND_VERTEX_BUFFER;
-	bd.CPUAccessFlags = 0;
+	bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;//0
 
 	//サブリソースの設定
 	D3D11_SUBRESOURCE_DATA init_data;
@@ -100,10 +104,77 @@ HRESULT create_index_buffer( custom_vertex const * const vertices, std::size_t c
 	return hr;
 }
 
+
+HRESULT create_index_buffer( custom_vertex const * const vertices, std::size_t const index_num, int const index )
+{
+	HRESULT hr;
+
+	//頂点バッファの設定
+	D3D11_BUFFER_DESC bd;
+	ZeroMemory( std::addressof( bd ), sizeof bd );
+	bd.Usage = D3D11_USAGE_DEFAULT;
+	bd.ByteWidth = ( sizeof custom_vertex ) * index_num;//sizeof XMFLOAT3
+	bd.BindFlags = D3D11_BIND_INDEX_BUFFER;//D3D11_BIND_VERTEX_BUFFER;
+	bd.CPUAccessFlags = 0;
+
+	//サブリソースの設定
+	D3D11_SUBRESOURCE_DATA init_data;
+	ZeroMemory( std::addressof( init_data ), sizeof init_data );
+	init_data.pSysMem = vertices;
+
+	ID3D11Buffer * p_vertex_buffer = nullptr;
+
+	//頂点バッファ生成
+	hr = cntxt->i_dev_->CreateBuffer( std::addressof( bd ), std::addressof( init_data ), std::addressof( p_vertex_buffer ) );
+
+	if( FAILED( hr ) )
+	{
+		return hr;
+	}
+
+	//入力アセンブラに頂点バッファを設定
+	UINT stride = sizeof custom_vertex;
+	UINT offset = 0;
+
+	//入力アセンブラに頂点バッファを設定
+	p_vertex_buffers[ index ] = p_vertex_buffer;
+
+	cntxt->i_dev_context_->IASetVertexBuffers( 0, 1, std::addressof( p_vertex_buffer ), std::addressof( stride ), std::addressof( offset ) );
+
+	return hr;
+}
+
+
 float convert_cordinate( int const position, int window_length )
 {
 	return static_cast< float >( position - window_length / 2 ) / ( ( window_length != 0 ? window_length : 100000 ) / 2.0 );
 }
+
+void move_texture( int const index, int x, int y, int width, int height )
+{
+	auto const v = create_vertices( x, y, width, height );
+	
+	D3D11_MAPPED_SUBRESOURCE msr;
+	cntxt->i_dev_context_->Map( p_vertex_buffers[ index ], 0, D3D11_MAP_WRITE_DISCARD, 0, std::addressof( msr ) );
+	memcpy( msr.pData, v.data(), sizeof( v[ 0 ] ) * 4 );
+	cntxt->i_dev_context_->Unmap( p_vertex_buffers[ index ], 0 );
+
+}
+
+
+//頂点の定義
+std::array< custom_vertex, 4 > create_vertices( int const x, int const y, int const width, int const height )
+{
+	std::array< custom_vertex, 4 > const ret =
+	{
+		XMFLOAT3( convert_cordinate( x + width, 640 ), convert_cordinate( y + height, 480 ), 0.5f ),
+		XMFLOAT3( convert_cordinate( x + width, 640 ), convert_cordinate( y, 480 ), 0.5f ),
+		XMFLOAT3( convert_cordinate( x, 640 ), convert_cordinate( y + height, 480 ), 0.5f ),
+		XMFLOAT3( convert_cordinate( x, 640 ), convert_cordinate( y, 480 ), 0.5f )
+	};
+
+	return ret;
+};
 
 HRESULT create_buffer( custom_vertex const * const vertices, std::size_t const vertices_num )
 {
@@ -144,8 +215,6 @@ HRESULT create_buffer( custom_vertex const * const vertices, std::size_t const v
 
 	return hr;
 }
-
-
 
 
 HRESULT init_dx11( HWND hwnd )
@@ -354,13 +423,7 @@ HRESULT init_dx11( HWND hwnd )
 
 	//頂点の定義
 	std::array< custom_vertex, 4 > vertices =
-	{
-		XMFLOAT3( convert_cordinate( 500, 640 ), 0.5f, 0.5f ),
-		XMFLOAT3( convert_cordinate( 500, 640 ), 0.3f, 0.5f ),
-		XMFLOAT3( convert_cordinate( 310, 640 ), 0.5f, 0.5f ),
-		XMFLOAT3( convert_cordinate( 310, 640 ), 0.3f, 0.5f )
-
-	};
+		create_vertices( 310, 280, 20, 20 );
 
 	//頂点の定義
 	std::array< custom_vertex, 4 > vertices2 =
@@ -404,10 +467,18 @@ void render_dx11()
 	cntxt->i_dev_context_->PSSetShader( cntxt->i_pixel_shader_.get(), nullptr, 0 );
 	
 
+	static int counter = 0;
+
 	for( int i = 0; i < p_vertex_buffers.size(); ++i )
 	{
 		UINT stride = sizeof custom_vertex;
 		UINT offset = 0;
+
+		if( i == 0 )
+		{
+			move_texture( i, 300 + ++counter, 120, 10, 10 );
+		}
+
 		cntxt->i_dev_context_->IASetVertexBuffers( 0, 1, std::addressof( p_vertex_buffers[ i ] ), std::addressof( stride ), std::addressof( offset ) );
 
 		cntxt->i_dev_context_->Draw( 4, 0 );
@@ -444,18 +515,20 @@ int WINAPI WinMain(
 	MSG msg = { 0 };
 
 	time_m::time_manager tm;
+	int counter = 0;
+
+
 
 	while( WM_QUIT != msg.message )
 	{
-		tm.update();
 
+		tm.update( );
 		auto const frame = tm.get_fps();
-		auto const fpsstr = boost::format( "%0.3f" ) % frame;
-		
+		auto const fpsstr = boost::format( "%0.3f fps" ) % frame;
 		
 		SetWindowText( global_h_wnd, static_cast< LPCSTR >( fpsstr.str( ).c_str() ) );
 		
-		Sleep( 16 );
+		tm.wait_auto();
 
 		if( PeekMessage( std::addressof( msg ), NULL, 0, 0, PM_REMOVE ) )
 		{
