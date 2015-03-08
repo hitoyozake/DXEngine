@@ -9,6 +9,7 @@
 #include <Windows.h>
 #include <boost/format.hpp>
 
+
 #include "shader.h"
 
 #include "common.h"
@@ -64,6 +65,12 @@ HWND global_h_wnd;
 
 
 std::vector< ID3D11Buffer * > p_vertex_buffers;
+
+void release_buffer( ID3D11Buffer ** buf )
+{
+	( *buf )->Release();
+	*buf = nullptr;
+}
 
 HRESULT create_index_buffer( custom_vertex const * const vertices, std::size_t const index_num )
 {
@@ -197,6 +204,7 @@ HRESULT create_buffer( custom_vertex const * const vertices, std::size_t const v
 
 	//頂点バッファ生成
 	hr = cntxt->i_dev_->CreateBuffer( std::addressof( bd ), std::addressof( init_data ), std::addressof( p_vertex_buffer ) );
+	
 
 	if( FAILED( hr ) )
 	{
@@ -480,12 +488,13 @@ void render_dx11()
 		}
 
 		cntxt->i_dev_context_->IASetVertexBuffers( 0, 1, std::addressof( p_vertex_buffers[ i ] ), std::addressof( stride ), std::addressof( offset ) );
-
+	
 		cntxt->i_dev_context_->Draw( 4, 0 );
+
 
 	}
 	
-	//結果をWindowに反映
+	//結果をWindowに反映(バックバッファから表へコピー)
 	cntxt->i_swap_chain_->Present( 0, 0 );
 }
 
@@ -521,14 +530,12 @@ int WINAPI WinMain(
 
 	while( WM_QUIT != msg.message )
 	{
-
-		tm.update( );
+		tm.update();
 		auto const frame = tm.get_fps();
 		auto const fpsstr = boost::format( "%0.3f fps" ) % frame;
 		
-		SetWindowText( global_h_wnd, static_cast< LPCSTR >( fpsstr.str( ).c_str() ) );
+		SetWindowText( global_h_wnd, static_cast< LPCSTR >( fpsstr.str().c_str() ) );
 		
-		tm.wait_auto();
 
 		if( PeekMessage( std::addressof( msg ), NULL, 0, 0, PM_REMOVE ) )
 		{
@@ -538,7 +545,11 @@ int WINAPI WinMain(
 		else
 		{
 			render_dx11();
+
+			tm.wait_auto( );
 		}
+
+
 	}
 
 	exit_dx11();

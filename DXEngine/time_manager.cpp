@@ -14,7 +14,7 @@ namespace time_m
 
 
 
-	time_manager::time_manager() : start_( std::chrono::system_clock::now() ), end_( std::chrono::system_clock::now() )
+	time_manager::time_manager( ) : start_( std::chrono::system_clock::now( ) ), end_( std::chrono::system_clock::now( ) ), log( "fps.txt" )
 	{
 		calc_result_ = std::chrono::duration_cast< std::chrono::milliseconds >( end_ - start_ ).count();
 	}
