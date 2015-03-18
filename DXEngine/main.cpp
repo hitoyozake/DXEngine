@@ -1,6 +1,12 @@
+#include "DirectXTex.h"
+
 #include <sdkddkver.h>
 #include <D3D11.h>
+#include <DXGIType.h>
+#include <d3dcompiler.h>
 #include <DirectXMath.h> //namespace DirectX空間使用
+
+#include <directxpackedvector.h>
 #include <xnamath.h>
 #include <string>
 #include <memory>
@@ -8,6 +14,7 @@
 #include <locale>
 #include <Windows.h>
 #include <boost/format.hpp>
+#include <DXGIFormat.h>
 
 
 #include "shader.h"
@@ -29,6 +36,8 @@ struct context
 	boost::shared_ptr< ID3D11GeometryShader > i_geometry_shader_;
 	boost::shared_ptr< ID3D11PixelShader > i_pixel_shader_;
 	boost::shared_ptr< ID3D11Buffer > i_vertex_buffer_;
+	ID3D11Texture2D*		g_pDepthStencil;
+
 
 	bool inited_flag_dx11_ = false;
 	D3D_DRIVER_TYPE driver_type_ = D3D_DRIVER_TYPE_NULL;
@@ -48,6 +57,31 @@ namespace
 }
 
 
+struct VertexData
+{
+	XMFLOAT3 pos;
+	XMFLOAT2 tex;
+};
+
+//シェーダ定数バッファ
+struct ConstBuff
+{
+	XMMATRIX mtxProj;
+	XMMATRIX mtxView;
+};
+
+struct CBuffObject
+{
+	XMMATRIX mtxWorld;
+	XMFLOAT4 v4MeshColor;
+};
+
+
+ID3D11ShaderResourceView* g_pShaderResView = NULL;
+ID3D11Texture2D*		g_pDepthStencil = NULL;
+ID3D11DepthStencilView*	g_pDepthStencilView = NULL;
+ID3D11RenderTargetView*	g_pRenderTargetView = NULL;
+
 //****************************************//
 //プロトタイプ宣言
 HRESULT init_dx11( HWND hwnd );
@@ -62,9 +96,14 @@ std::array< custom_vertex, 4 > create_vertices( int const x, int const y, int co
 //****************************************//
 HWND global_h_wnd;
 //****************************************//
+ID3D11SamplerState*		g_pSamplerLinear = NULL;
 
 
 std::vector< ID3D11Buffer * > p_vertex_buffers;
+ID3D11Buffer * poly_test_buffer;
+ID3D11Buffer * poly_test_buffer_index;
+ID3D11Buffer*			g_pCBuffObject = NULL;
+
 
 void release_buffer( ID3D11Buffer ** buf )
 {
@@ -298,7 +337,7 @@ HRESULT init_dx11( HWND hwnd )
 	ID3D11Texture2D * back_buff = nullptr;
 
 	hr = cntxt->i_swap_chain_->GetBuffer( 0, __uuidof( ID3D11Texture2D ), reinterpret_cast< LPVOID * >( std::addressof( back_buff ) ) );
-
+	
 	if( FAILED( hr ) || back_buff == nullptr )
 	{
 		return hr;
@@ -312,12 +351,54 @@ HRESULT init_dx11( HWND hwnd )
 	{
 		return hr;
 	}
-
-	cntxt->i_render_target_view_.reset( render_target_view_ptr );
+	back_buff->Release( );
 
 	std::array< ID3D11RenderTargetView *, 1 > rtv = { cntxt->i_render_target_view_.get() };
 	cntxt->i_dev_context_->OMSetRenderTargets( 1, rtv.data(), nullptr );
 
+	//depth stencil buffer
+	// デプスバッファ作成
+	D3D11_TEXTURE2D_DESC decs_depth;
+	ZeroMemory( &decs_depth, sizeof( decs_depth ) );
+	decs_depth.Width = width;
+	decs_depth.Height = height;
+	decs_depth.MipLevels = 1;
+	decs_depth.ArraySize = 1;
+	decs_depth.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+	decs_depth.SampleDesc.Count = 1;
+	decs_depth.SampleDesc.Quality = 0;
+	decs_depth.Usage = D3D11_USAGE_DEFAULT;
+	decs_depth.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+	decs_depth.CPUAccessFlags = 0;
+	decs_depth.MiscFlags = 0;
+
+	ID3D11DepthStencilView * tmp_depth_stencil_view_ = nullptr;
+
+	hr = cntxt->i_dev_->CreateTexture2D( &decs_depth, NULL, & cntxt->g_pDepthStencil );
+
+	if( FAILED( hr ) )
+	{
+		return hr;
+	}
+
+	// DepthStencilView作成
+	D3D11_DEPTH_STENCIL_VIEW_DESC descDSV;
+	ZeroMemory( &descDSV, sizeof( descDSV ) );
+	descDSV.Format = decs_depth.Format;
+	descDSV.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+	descDSV.Texture2D.MipSlice = 0;
+
+	hr = cntxt->i_dev_->CreateDepthStencilView( cntxt->g_pDepthStencil, &descDSV, &g_pDepthStencilView );
+	if( FAILED( hr ) )
+	{
+		return hr;
+	}
+
+	// ターゲットビュー登録
+	cntxt->i_dev_context_->OMSetRenderTargets( 1, & render_target_view_ptr, g_pDepthStencilView );
+	//これでレンダリング結果がスワップチェインのバッファに書き込まれる
+
+	cntxt->i_render_target_view_.reset( render_target_view_ptr );
 
 	//setting of view port
 	D3D11_VIEWPORT vp;
@@ -332,7 +413,7 @@ HRESULT init_dx11( HWND hwnd )
 	//頂点シェーダをコンパイル
 	ID3DBlob * p_vs_blob = nullptr;
 
-	hr = shader::compile_shader( TEXT( "hoge.fx" ), "VSFunc", "vs_4_0", std::addressof( p_vs_blob ) );
+	hr = shader::compile_shader( TEXT( "hoge3D.fx" ), "vsMain", "vs_4_0", std::addressof( p_vs_blob ) );
 
 	if( FAILED( hr ) )
 	{
@@ -355,11 +436,15 @@ HRESULT init_dx11( HWND hwnd )
 
 
 	//入力レイアウトの定義
-	cntxt->i_dev_context_->IASetInputLayout( cntxt->i_vertex_layout_.get() );
+	//cntxt->i_dev_context_->IASetInputLayout( cntxt->i_vertex_layout_.get() );
 
-	std::array< D3D11_INPUT_ELEMENT_DESC, 1 > layout = {
-		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+	std::array< D3D11_INPUT_ELEMENT_DESC, 2 > layout = {
+		D3D11_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+		D3D11_INPUT_ELEMENT_DESC{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
 	};
+	/*std::array< D3D11_INPUT_ELEMENT_DESC, 2 > layout = {
+		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+	};*/
 	//入力レイアウトを生成
 	ID3D11InputLayout * p_vertex_layout = nullptr;
 	hr = cntxt->i_dev_->CreateInputLayout( layout.data(), layout.size(), p_vs_blob->GetBufferPointer(), p_vs_blob->GetBufferSize(), std::addressof( p_vertex_layout ) );
@@ -377,7 +462,7 @@ HRESULT init_dx11( HWND hwnd )
 	//ジオメトリシェーダコンパイル
 	ID3DBlob * p_gs_blob = nullptr;
 
-	hr = shader::compile_shader( TEXT( "./hoge.fx" ), "GSFunc", "gs_4_0", std::addressof( p_gs_blob ) );
+	hr = shader::compile_shader( TEXT( "./hoge.fx" ), "GSFunc", "gs_4_0", std::addressof( p_gs_blob ) );//"GSFunc", "gs_4_0", std::addressof( p_gs_blob ) );
 
 	if( FAILED( hr ) )
 	{
@@ -400,7 +485,7 @@ HRESULT init_dx11( HWND hwnd )
 	//ピクセルシェーダのコンパイル
 	ID3DBlob * p_ps_blob = nullptr;
 
-	hr = shader::compile_shader( TEXT( "./hoge.fx" ), "PSFunc", "ps_4_0", std::addressof( p_ps_blob ) );
+	hr = shader::compile_shader( TEXT( "./hoge3D.fx" ), "psMain", "ps_4_0", std::addressof( p_ps_blob ) );
 
 	if( FAILED( hr ) )
 	{
@@ -451,6 +536,166 @@ HRESULT init_dx11( HWND hwnd )
 	cntxt->i_dev_context_->IASetPrimitiveTopology( D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP );
 	//cntxt->i_dev_context_->IASetPrimitiveTopology( D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST );
 
+
+	//3D
+	VertexData verticespoly[ ] = {
+		{ XMFLOAT3( -1.0f, 1.0f, -1.0f ), XMFLOAT2( 1.0f, 0.0f ) },
+		{ XMFLOAT3( 1.0f, 1.0f, -1.0f ), XMFLOAT2( 0.0f, 0.0f ) },
+		{ XMFLOAT3( 1.0f, 1.0f, 1.0f ), XMFLOAT2( 0.0f, 1.0f ) },
+		{ XMFLOAT3( -1.0f, 1.0f, 1.0f ), XMFLOAT2( 1.0f, 1.0f ) },
+
+		{ XMFLOAT3( -1.0f, -1.0f, -1.0f ), XMFLOAT2( 0.0f, 0.0f ) },
+		{ XMFLOAT3( 1.0f, -1.0f, -1.0f ), XMFLOAT2( 1.0f, 0.0f ) },
+		{ XMFLOAT3( 1.0f, -1.0f, 1.0f ), XMFLOAT2( 1.0f, 1.0f ) },
+		{ XMFLOAT3( -1.0f, -1.0f, 1.0f ), XMFLOAT2( 0.0f, 1.0f ) },
+
+		{ XMFLOAT3( -1.0f, -1.0f, 1.0f ), XMFLOAT2( 0.0f, 1.0f ) },
+		{ XMFLOAT3( -1.0f, -1.0f, -1.0f ), XMFLOAT2( 1.0f, 1.0f ) },
+		{ XMFLOAT3( -1.0f, 1.0f, -1.0f ), XMFLOAT2( 1.0f, 0.0f ) },
+		{ XMFLOAT3( -1.0f, 1.0f, 1.0f ), XMFLOAT2( 0.0f, 0.0f ) },
+
+		{ XMFLOAT3( 1.0f, -1.0f, 1.0f ), XMFLOAT2( 1.0f, 1.0f ) },
+		{ XMFLOAT3( 1.0f, -1.0f, -1.0f ), XMFLOAT2( 0.0f, 1.0f ) },
+		{ XMFLOAT3( 1.0f, 1.0f, -1.0f ), XMFLOAT2( 0.0f, 0.0f ) },
+		{ XMFLOAT3( 1.0f, 1.0f, 1.0f ), XMFLOAT2( 1.0f, 0.0f ) },
+
+		{ XMFLOAT3( -1.0f, -1.0f, -1.0f ), XMFLOAT2( 0.0f, 1.0f ) },
+		{ XMFLOAT3( 1.0f, -1.0f, -1.0f ), XMFLOAT2( 1.0f, 1.0f ) },
+		{ XMFLOAT3( 1.0f, 1.0f, -1.0f ), XMFLOAT2( 1.0f, 0.0f ) },
+		{ XMFLOAT3( -1.0f, 1.0f, -1.0f ), XMFLOAT2( 0.0f, 0.0f ) },
+
+		{ XMFLOAT3( -1.0f, -1.0f, 1.0f ), XMFLOAT2( 1.0f, 1.0f ) },
+		{ XMFLOAT3( 1.0f, -1.0f, 1.0f ), XMFLOAT2( 0.0f, 1.0f ) },
+		{ XMFLOAT3( 1.0f, 1.0f, 1.0f ), XMFLOAT2( 0.0f, 0.0f ) },
+		{ XMFLOAT3( -1.0f, 1.0f, 1.0f ), XMFLOAT2( 1.0f, 0.0f ) },
+	};
+
+	{
+		D3D11_BUFFER_DESC bd;
+		ZeroMemory( &bd, sizeof( bd ) );
+		bd.Usage = D3D11_USAGE_DEFAULT;
+		bd.ByteWidth = sizeof( VertexData )* 24;
+		bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+		bd.CPUAccessFlags = 0;
+		D3D11_SUBRESOURCE_DATA InitData;
+		ZeroMemory( &InitData, sizeof( InitData ) );
+		InitData.pSysMem = verticespoly;
+		hr = cntxt->i_dev_->CreateBuffer( &bd, &InitData, &poly_test_buffer );
+		if( FAILED( hr ) )
+		{
+			return hr;
+		}
+
+	}
+
+	{
+
+
+		// インデックスバッファ作成
+		WORD indices[] = {
+			3, 1, 0,
+			2, 1, 3,
+
+			6, 4, 5,
+			7, 4, 6,
+
+			11, 9, 8,
+			10, 9, 11,
+
+			14, 12, 13,
+			15, 12, 14,
+
+			19, 17, 16,
+			18, 17, 19,
+
+			22, 20, 21,
+			23, 20, 22
+		};
+
+		D3D11_BUFFER_DESC bd;
+		ZeroMemory( &bd, sizeof( bd ) );
+		D3D11_SUBRESOURCE_DATA InitData;
+		bd.Usage = D3D11_USAGE_DEFAULT;
+		bd.ByteWidth = sizeof( WORD )* 36;
+		bd.BindFlags = D3D11_BIND_INDEX_BUFFER;
+		bd.CPUAccessFlags = 0;
+		InitData.pSysMem = indices;
+		hr = cntxt->i_dev_->CreateBuffer( &bd, &InitData, & poly_test_buffer_index );
+		if( FAILED( hr ) )
+		{
+			return hr;
+		}
+	}
+	//テクスチャ作成
+	// 画像ファイル読み込み DirectXTex
+	
+	DirectX::TexMetadata metadata;
+	DirectX::ScratchImage image;
+	hr = LoadFromWICFile( L"texture.png", 0, &metadata, image );
+
+	if( FAILED( hr ) )
+	{
+		return hr;
+	}
+
+	// 画像からシェーダリソースView DirectXTex
+	hr = CreateShaderResourceView( cntxt->i_dev_.get(), image.GetImages(), image.GetImageCount(), metadata, & g_pShaderResView );
+	if( FAILED( hr ) )
+	{
+		return hr;
+	}
+
+	// SamplerState作成
+	D3D11_SAMPLER_DESC sampDesc;
+	ZeroMemory( &sampDesc, sizeof( sampDesc ) );
+	sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+	sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+	sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+	sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+	sampDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+	sampDesc.MinLOD = 0;
+	sampDesc.MaxLOD = D3D11_FLOAT32_MAX;
+	hr = cntxt->i_dev_->CreateSamplerState( &sampDesc, &g_pSamplerLinear );
+	if( FAILED( hr ) )
+	{
+		return hr;
+	}
+
+	//定数バッファ作成
+	{
+		D3D11_BUFFER_DESC bd;
+		ZeroMemory( &bd, sizeof( bd ) );
+		bd.Usage = D3D11_USAGE_DEFAULT;
+		bd.ByteWidth = sizeof( ConstBuff );
+		bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+		bd.CPUAccessFlags = 0;
+
+		hr = cntxt->i_dev_->CreateBuffer( &bd, NULL, & poly_test_buffer );
+		if( FAILED( hr ) )
+		{
+			return hr;
+		}
+
+		bd.ByteWidth = sizeof( CBuffObject );
+		hr = cntxt->i_dev_->CreateBuffer( &bd, NULL, &g_pCBuffObject );
+		if( FAILED( hr ) )
+		{
+			return hr;
+		}
+
+	}
+
+
+
+	// 定数バッファ
+	ConstBuff cbuff;
+	XMVECTOR Eye = XMVectorSet( 0.0f, 3.0f, -6.0f, 0.0f );
+	XMVECTOR At = XMVectorSet( 0.0f, 1.0f, 0.0f, 0.0f );
+	XMVECTOR Up = XMVectorSet( 0.0f, 1.0f, 0.0f, 0.0f );
+	cbuff.mtxView = XMMatrixTranspose( XMMatrixLookAtLH( Eye, At, Up ) );
+	cbuff.mtxProj = XMMatrixTranspose( XMMatrixPerspectiveFovLH( XM_PIDIV4, width / ( FLOAT )height, 0.01f, 100.0f ) );
+	cntxt->i_dev_context_->UpdateSubresource( poly_test_buffer, 0, NULL, &cbuff, 0, 0 );
+
 	return S_OK;
 
 }
@@ -468,6 +713,15 @@ void render_dx11()
 
 	//指定色で画面をクリアにする．r = 0, g = 0.125, b = 0.3, alpha = 1.0f;rgb = {};
 	std::array< float, 4 > clear_color = { 0.1f, 0.0f, 0.125f , 1.0f };
+
+	//デプスバッファをクリア
+	cntxt->i_dev_context_->ClearDepthStencilView( cntxt->i_depth_stencil_view_.get(), D3D11_CLEAR_DEPTH, 1.0f, 0 );
+
+	//入力レイアウト
+	cntxt->i_dev_context_->IASetInputLayout( cntxt->i_vertex_layout_.get() );
+
+	cntxt->i_dev_context_->IASetIndexBuffer( poly_test_buffer_index, DXGI_FORMAT_R16_UINT, 0 );
+
 	cntxt->i_dev_context_->ClearRenderTargetView( cntxt->i_render_target_view_.get(), clear_color.data() );
 
 	cntxt->i_dev_context_->VSSetShader( cntxt->i_vertex_shader_.get(), nullptr, 0 );
@@ -475,7 +729,7 @@ void render_dx11()
 	cntxt->i_dev_context_->PSSetShader( cntxt->i_pixel_shader_.get(), nullptr, 0 );
 	
 
-	static int counter = 0;
+	/*static int counter = 0;
 
 	for( int i = 0; i < p_vertex_buffers.size(); ++i )
 	{
@@ -492,7 +746,41 @@ void render_dx11()
 		cntxt->i_dev_context_->Draw( 4, 0 );
 
 
-	}
+
+	}*/
+
+	UINT offset = 0;
+	UINT stride = sizeof VertexData;
+
+	cntxt->i_dev_context_->IASetVertexBuffers( 0, 1, std::addressof( poly_test_buffer ), std::addressof( stride ), std::addressof( offset ) );
+
+	cntxt->i_dev_context_->IASetPrimitiveTopology( D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST );
+
+	//回転
+	static float g_fRotY = 0.0f;
+	static DWORD dwTimeStart = 0;
+	DWORD dwTimeCur = GetTickCount( );
+	if( dwTimeStart == 0 ) dwTimeStart = dwTimeCur;
+	g_fRotY = ( dwTimeCur - dwTimeStart ) / 1000.0f;
+
+
+
+	// 姿勢行列と色を更新
+	CBuffObject cbobj;
+	cbobj.mtxWorld = XMMatrixTranspose( XMMatrixRotationY( g_fRotY ) );
+	cbobj.v4MeshColor = XMFLOAT4( sinf( g_fRotY )*0.5f + 0.5f, 1.0f, 1.0f, 1.0f );
+	cntxt->i_dev_context_->UpdateSubresource( g_pCBuffObject, 0, NULL, &cbobj, 0, 0 );
+
+
+	cntxt->i_dev_context_->VSSetConstantBuffers( 1, 1, &g_pCBuffObject );
+	cntxt->i_dev_context_->VSSetConstantBuffers( 0, 1, &poly_test_buffer );
+
+	cntxt->i_dev_context_->PSSetConstantBuffers( 1, 1, &g_pCBuffObject );
+	cntxt->i_dev_context_->PSSetShaderResources( 0, 1, &g_pShaderResView );
+	cntxt->i_dev_context_->PSSetSamplers( 0, 1, &g_pSamplerLinear );
+
+	cntxt->i_dev_context_->DrawIndexed( 36, 0, 0 );
+
 	
 	//結果をWindowに反映(バックバッファから表へコピー)
 	cntxt->i_swap_chain_->Present( 0, 0 );

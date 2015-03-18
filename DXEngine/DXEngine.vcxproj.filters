@@ -19,6 +19,9 @@
     <Filter Include="ソース ファイル\include\modules">
       <UniqueIdentifier>{bf11c47c-901f-406f-ace6-6d5401fa484b}</UniqueIdentifier>
     </Filter>
+    <Filter Include="ソース ファイル\3D">
+      <UniqueIdentifier>{479a7e05-d19a-47e2-b317-fb8a520eeaf7}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -29,6 +32,9 @@
     </ClCompile>
     <ClCompile Include="time_manager.cpp">
       <Filter>ソース ファイル\include\modules</Filter>
+    </ClCompile>
+    <ClCompile Include="d3d.cpp">
+      <Filter>ソース ファイル\3D</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -41,5 +47,16 @@
     <ClInclude Include="time_manager.h">
       <Filter>ソース ファイル\include\modules</Filter>
     </ClInclude>
+    <ClInclude Include="DirectXTex.h">
+      <Filter>ソース ファイル\3D</Filter>
+    </ClInclude>
+    <ClInclude Include="DirectXTexp.h">
+      <Filter>ソース ファイル\3D</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="DirectXTex.inl">
+      <Filter>ソース ファイル\3D</Filter>
+    </None>
   </ItemGroup>
 </Project>

@@ -16,18 +16,17 @@ namespace time_m
 		time_manager();
 		double get_fps() const
 		{
-			return ( 16.66 * 60 ) / static_cast< double >( ( std::max< long long > )( calc_result_, 1 ) );
+			return ( 16 * 60 ) / static_cast< double >( ( std::max< long long > )( calc_result_, 1 ) );
 		}
 
 		void update()
 		{
+			//do something
 		}
 
 		void wait_auto()
 		{
 			calc_result_ = static_cast< long >( ( std::chrono::high_resolution_clock::now() - st_ ).count() / 10000.0  );
-
-			//assert( calc_result_ >= 0 );
 
 			auto const fps_calc = 16 - calc_result_;
 
@@ -37,9 +36,9 @@ namespace time_m
 				log << fps_calc << std::endl;
 
 			}
-			//Sleep( 16 );
-			st_ = std::chrono::high_resolution_clock::now( );
 
+			calc_result_ = static_cast< long >( ( std::chrono::high_resolution_clock::now() - st_ ).count( ) / 10000.0 );
+			st_ = std::chrono::high_resolution_clock::now();
 
 		}
 
