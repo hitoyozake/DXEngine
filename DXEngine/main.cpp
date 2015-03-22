@@ -36,6 +36,9 @@ struct context
 	boost::shared_ptr< ID3D11GeometryShader > i_geometry_shader_;
 	boost::shared_ptr< ID3D11PixelShader > i_pixel_shader_;
 	boost::shared_ptr< ID3D11Buffer > i_vertex_buffer_;
+	ID3D11Buffer * const_buffer_;
+	ID3D11Buffer * cbuff_obj_;
+
 	ID3D11Texture2D*		g_pDepthStencil;
 
 
@@ -81,6 +84,8 @@ ID3D11ShaderResourceView* g_pShaderResView = NULL;
 ID3D11Texture2D*		g_pDepthStencil = NULL;
 ID3D11DepthStencilView*	g_pDepthStencilView = NULL;
 ID3D11RenderTargetView*	g_pRenderTargetView = NULL;
+ID3D11Buffer*			g_pConstBuffer = NULL;
+
 
 //****************************************//
 //プロトタイプ宣言
@@ -400,6 +405,8 @@ HRESULT init_dx11( HWND hwnd )
 
 	cntxt->i_render_target_view_.reset( render_target_view_ptr );
 
+	cntxt->i_depth_stencil_view_.reset( g_pDepthStencilView );
+
 	//setting of view port
 	D3D11_VIEWPORT vp;
 	vp.Width = static_cast< FLOAT >( width );
@@ -670,14 +677,19 @@ HRESULT init_dx11( HWND hwnd )
 		bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
 		bd.CPUAccessFlags = 0;
 
-		hr = cntxt->i_dev_->CreateBuffer( &bd, NULL, & poly_test_buffer );
+
+		hr = cntxt->i_dev_->CreateBuffer( std::addressof( bd ), nullptr, std::addressof( cntxt->const_buffer_ ) );
+
+
 		if( FAILED( hr ) )
 		{
 			return hr;
 		}
 
-		bd.ByteWidth = sizeof( CBuffObject );
-		hr = cntxt->i_dev_->CreateBuffer( &bd, NULL, &g_pCBuffObject );
+		bd.ByteWidth = sizeof CBuffObject;
+
+		hr = cntxt->i_dev_->CreateBuffer( std::addressof( bd ), nullptr, std::addressof( cntxt->cbuff_obj_ ) );
+
 		if( FAILED( hr ) )
 		{
 			return hr;
@@ -694,7 +706,7 @@ HRESULT init_dx11( HWND hwnd )
 	XMVECTOR Up = XMVectorSet( 0.0f, 1.0f, 0.0f, 0.0f );
 	cbuff.mtxView = XMMatrixTranspose( XMMatrixLookAtLH( Eye, At, Up ) );
 	cbuff.mtxProj = XMMatrixTranspose( XMMatrixPerspectiveFovLH( XM_PIDIV4, width / ( FLOAT )height, 0.01f, 100.0f ) );
-	cntxt->i_dev_context_->UpdateSubresource( poly_test_buffer, 0, NULL, &cbuff, 0, 0 );
+	cntxt->i_dev_context_->UpdateSubresource( cntxt->const_buffer_, 0, NULL, std::addressof( cbuff ), 0, 0 );
 
 	return S_OK;
 
@@ -714,18 +726,29 @@ void render_dx11()
 	//指定色で画面をクリアにする．r = 0, g = 0.125, b = 0.3, alpha = 1.0f;rgb = {};
 	std::array< float, 4 > clear_color = { 0.1f, 0.0f, 0.125f , 1.0f };
 
+
 	//デプスバッファをクリア
 	cntxt->i_dev_context_->ClearDepthStencilView( cntxt->i_depth_stencil_view_.get(), D3D11_CLEAR_DEPTH, 1.0f, 0 );
 
-	//入力レイアウト
-	cntxt->i_dev_context_->IASetInputLayout( cntxt->i_vertex_layout_.get() );
+	cntxt->i_dev_context_->IASetPrimitiveTopology( D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST );
 
-	cntxt->i_dev_context_->IASetIndexBuffer( poly_test_buffer_index, DXGI_FORMAT_R16_UINT, 0 );
+	//入力レイアウト
 
 	cntxt->i_dev_context_->ClearRenderTargetView( cntxt->i_render_target_view_.get(), clear_color.data() );
 
+	cntxt->i_dev_context_->IASetIndexBuffer( poly_test_buffer_index, DXGI_FORMAT_R16_UINT, 0 );
+	cntxt->i_dev_context_->IASetInputLayout( cntxt->i_vertex_layout_.get( ) );
+
+
+	UINT offset = 0;
+	UINT stride = sizeof VertexData;
+
+	cntxt->i_dev_context_->IASetVertexBuffers( 0, 1, std::addressof( poly_test_buffer ), std::addressof( stride ), std::addressof( offset ) );
+
+
+
 	cntxt->i_dev_context_->VSSetShader( cntxt->i_vertex_shader_.get(), nullptr, 0 );
-	cntxt->i_dev_context_->GSSetShader( cntxt->i_geometry_shader_.get(), nullptr, 0 );
+	//cntxt->i_dev_context_->GSSetShader( cntxt->i_geometry_shader_.get(), nullptr, 0 );
 	cntxt->i_dev_context_->PSSetShader( cntxt->i_pixel_shader_.get(), nullptr, 0 );
 	
 
@@ -749,13 +772,6 @@ void render_dx11()
 
 	}*/
 
-	UINT offset = 0;
-	UINT stride = sizeof VertexData;
-
-	cntxt->i_dev_context_->IASetVertexBuffers( 0, 1, std::addressof( poly_test_buffer ), std::addressof( stride ), std::addressof( offset ) );
-
-	cntxt->i_dev_context_->IASetPrimitiveTopology( D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST );
-
 	//回転
 	static float g_fRotY = 0.0f;
 	static DWORD dwTimeStart = 0;
@@ -769,13 +785,13 @@ void render_dx11()
 	CBuffObject cbobj;
 	cbobj.mtxWorld = XMMatrixTranspose( XMMatrixRotationY( g_fRotY ) );
 	cbobj.v4MeshColor = XMFLOAT4( sinf( g_fRotY )*0.5f + 0.5f, 1.0f, 1.0f, 1.0f );
-	cntxt->i_dev_context_->UpdateSubresource( g_pCBuffObject, 0, NULL, &cbobj, 0, 0 );
+	cntxt->i_dev_context_->UpdateSubresource( cntxt->cbuff_obj_, 0, NULL, &cbobj, 0, 0 );
+	
+	cntxt->i_dev_context_->VSSetConstantBuffers( 1, 1, std::addressof( cntxt->cbuff_obj_ ) );
 
+	cntxt->i_dev_context_->VSSetConstantBuffers( 0, 1, & cntxt->const_buffer_ );
 
-	cntxt->i_dev_context_->VSSetConstantBuffers( 1, 1, &g_pCBuffObject );
-	cntxt->i_dev_context_->VSSetConstantBuffers( 0, 1, &poly_test_buffer );
-
-	cntxt->i_dev_context_->PSSetConstantBuffers( 1, 1, &g_pCBuffObject );
+	cntxt->i_dev_context_->PSSetConstantBuffers( 1, 1, std::addressof( cntxt->cbuff_obj_ ) );
 	cntxt->i_dev_context_->PSSetShaderResources( 0, 1, &g_pShaderResView );
 	cntxt->i_dev_context_->PSSetSamplers( 0, 1, &g_pSamplerLinear );
 
