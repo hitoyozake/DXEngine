@@ -79,16 +79,21 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="box.cpp" />
     <ClCompile Include="d3d.cpp" />
+    <ClCompile Include="global.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="shader.cpp" />
     <ClCompile Include="time_manager.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="box.h" />
     <ClInclude Include="common.h" />
     <ClInclude Include="DirectXTex.h" />
     <ClInclude Include="DirectXTexp.h" />
+    <ClInclude Include="global.h" />
     <ClInclude Include="shader.h" />
+    <ClInclude Include="struct.h" />
     <ClInclude Include="time_manager.h" />
   </ItemGroup>
   <ItemGroup>
