@@ -72,3 +72,8 @@ struct CBuffObject
 	XMFLOAT4 v4MeshColor;
 };
 
+
+struct input_layout
+{
+
+};

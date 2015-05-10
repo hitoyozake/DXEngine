@@ -22,6 +22,12 @@
     <Filter Include="ソース ファイル\3D">
       <UniqueIdentifier>{479a7e05-d19a-47e2-b317-fb8a520eeaf7}</UniqueIdentifier>
     </Filter>
+    <Filter Include="ソース ファイル\ModelLoader">
+      <UniqueIdentifier>{61c5d175-eeb6-4aad-8cb8-c7c24c7731e8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ソース ファイル\model">
+      <UniqueIdentifier>{81bcdda9-2085-4c15-b671-9393c99bef2a}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -41,6 +47,12 @@
     </ClCompile>
     <ClCompile Include="global.cpp">
       <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="modelLoader.cpp">
+      <Filter>ソース ファイル\ModelLoader</Filter>
+    </ClCompile>
+    <ClCompile Include="modeldata.cpp">
+      <Filter>ソース ファイル\model</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -67,6 +79,9 @@
     </ClInclude>
     <ClInclude Include="box.h">
       <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="modeldata.h">
+      <Filter>ソース ファイル\model</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

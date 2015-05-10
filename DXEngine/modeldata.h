@@ -1,7 +1,8 @@
 #pragma once
 
 #include <vector>
-
+#include <string>
+#include <fstream>
 #include <sdkddkver.h>
 #include <D3D11.h>
 #include <DXGIType.h>
@@ -12,7 +13,8 @@
 
 #include <boost/math/constants/constants.hpp>
 
-namespace model
+
+namespace model_ns
 {
 	struct matrix
 	{
@@ -49,6 +51,8 @@ namespace model
 		ID3D11ShaderResourceView * srv_;		//テクスチャデータ
 	};
 
+	
+
 
 	class meshdata
 	{
@@ -69,8 +73,62 @@ namespace model
 
 	private:
 		std::vector< subsetdata > subset_;
+	};
 
+	class model_loader
+	{
+	public:
+		bool load( std::string const & filename )
+		{
+			std::ifstream file( filename, std::ios_base::binary );
 
+			if( !file )
+			{
+				return false;
+			}
+
+			auto const size = static_cast< std::size_t >( file.seekg( 0, file.end ).tellg() );
+
+			file.seekg( 0, std::ios::beg );
+
+			try
+			{
+				model_buf_ = new char[ size + 1 ]{ 0 };	//std::fill( model_buf_, 0, size + 1, 0 );
+			}
+			catch( std::bad_alloc & bad )
+			{
+				return false;
+			}
+
+			model_buf_[ size ] = '\0';
+
+			cursol_pos_ = 0;
+			rest_size_ = size;
+
+			return true;
+		}
+	private:
+		char * model_buf_;
+		int32_t cursol_pos_;
+		int32_t rest_size_;
+	};
+
+	class mesh
+	{
+	public:
+	private:
+	};
+
+	class model
+	{
+	public:
+		std::vector< mesh* > meshes_;
+		mesh* mesh( uint32_t const index );
+		uint32_t num_meshes();
+		uint32_t num_clips();
+		void release();			//開放処理
+				
+	private:
 	};
 
 
@@ -82,6 +140,11 @@ namespace model
 		void draw();
 		bool create_buffer();
 		
+		bool load_from_x_file( std::string const & path )
+		{
+
+		}
+
 		std::vector< matrix > get_skin_transform_matrix();
 		std::vector< D3DXMATRIX > get_d3dx_skin_transform_matrix();
 		void update( bool const stop_flag = false, float const speed = 1.0f );
@@ -103,7 +166,6 @@ namespace model
 
 			view_dir_	= D3DXVECTOR3( 0.0f, 0.0f, 1.0f );
 			light_dir_ = D3DXVECTOR3( 0.0f, 1.0f, 0.0f );
-
 		}
 
 		bool on_init()
@@ -118,6 +180,13 @@ namespace model
 			D3DXMatrixIdentity( &world_ );
 			D3DXMatrixLookAtLH( &view_, &camera_position, &camera_target, &camera_upvector );
 			D3DXMatrixPerspectiveFovLH( &projection_, pi_over4, 0.0f, 0.1f, 1000.0f );//第3引数は修正の必要ありかも
+
+			//ベクトル計算
+			view_dir_ = camera_target - camera_position;
+			light_dir_ = D3DXVECTOR3( 0.0f, 1.0f, -1.0f );
+			
+			
+
 		}
 
 		void on_release();
@@ -134,8 +203,6 @@ namespace model
 		D3DXMATRIX projection_;		//射影行列
 		D3DXVECTOR3 view_dir_;		//視線ベクトル
 		D3DXVECTOR3 light_dir_;		//ライトの方向ベクトル
-
-
 
 	};
 

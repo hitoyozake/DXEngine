@@ -5,6 +5,8 @@
 #include <DXGIType.h>
 #include <d3dcompiler.h>
 #include <DirectXMath.h> //namespace DirectX空間使用
+#include <DXGIFormat.h>
+
 
 #include <directxpackedvector.h>
 #include <xnamath.h>
@@ -14,7 +16,6 @@
 #include <locale>
 #include <Windows.h>
 #include <boost/format.hpp>
-#include <DXGIFormat.h>
 
 #include "struct.h"
 
@@ -491,9 +492,9 @@ HRESULT init_dx11( HWND hwnd )
 	//cntxt->i_dev_context_->IASetPrimitiveTopology( D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST );
 
 
-	box::make_box( 0.2f, 1.4f, 0, & poly_test_buffer[ 0 ], & poly_test_buffer_index[ 0 ] );
-	box::make_box( 0.3f, 2.2f , 0, &poly_test_buffer[ 1 ], &poly_test_buffer_index[ 1 ] );
-	box::make_box( 0.1f, 3.5f, 0, &poly_test_buffer[ 2 ], &poly_test_buffer_index[ 2 ] );
+	box::make_box( -1.5f, -1.2f, 0, & poly_test_buffer[ 0 ], & poly_test_buffer_index[ 0 ] );
+	box::make_box( 0.0f, 1.1f , 0, &poly_test_buffer[ 1 ], &poly_test_buffer_index[ 1 ] );
+	box::make_box( 1.6f, 4.2f, 0, &poly_test_buffer[ 2 ], &poly_test_buffer_index[ 2 ] );
 
 	
 	//テクスチャ作成

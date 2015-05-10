@@ -83,6 +83,8 @@
     <ClCompile Include="d3d.cpp" />
     <ClCompile Include="global.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="modeldata.cpp" />
+    <ClCompile Include="modelLoader.cpp" />
     <ClCompile Include="shader.cpp" />
     <ClCompile Include="time_manager.cpp" />
   </ItemGroup>
@@ -92,6 +94,7 @@
     <ClInclude Include="DirectXTex.h" />
     <ClInclude Include="DirectXTexp.h" />
     <ClInclude Include="global.h" />
+    <ClInclude Include="modeldata.h" />
     <ClInclude Include="shader.h" />
     <ClInclude Include="struct.h" />
     <ClInclude Include="time_manager.h" />
